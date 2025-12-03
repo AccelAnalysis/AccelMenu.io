@@ -46,3 +46,4 @@ export const removeFromPlaylist = (screenId, itemId) =>
 // Data import/export
 export const exportData = () => request('/api/export');
 export const importData = (payload) => request('/api/import', { method: 'POST', body: JSON.stringify(payload) });
+export const importLegacyData = (payload) => request('/api/import/legacy', { method: 'POST', body: JSON.stringify(payload) });
