@@ -1,11 +1,15 @@
 import React from 'react';
 import { Plus } from 'lucide-react';
 
-export function SlideCard({ slide, onEdit }) {
+export function SlideCard({ slide, onEdit, onDragStart, onDragEnd }) {
   return (
     <div
       draggable
-      onDragStart={(e) => e.dataTransfer.setData('slideId', slide.id)}
+      onDragStart={(e) => {
+        e.dataTransfer.setData('slideId', slide.id);
+        onDragStart?.(slide.id);
+      }}
+      onDragEnd={onDragEnd}
       className="bg-neutral-800 p-3 rounded border border-neutral-700 hover:border-orange-500 cursor-move group"
     >
       <div className="flex justify-between items-center mb-2">
