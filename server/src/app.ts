@@ -4,6 +4,7 @@ import morgan from "morgan";
 import slidesRouter from "./routes/slides";
 import screensRouter from "./routes/screens";
 import playlistsRouter from "./routes/playlists";
+import importExportRouter from "./routes/importExport";
 import errorHandler from "./middleware/errorHandler";
 
 const app = express();
@@ -19,6 +20,7 @@ app.get("/health", (_req: Request, res: Response) => {
 app.use("/api/slides", slidesRouter);
 app.use("/api/screens", screensRouter);
 app.use("/api/playlists", playlistsRouter);
+app.use("/api", importExportRouter);
 
 app.use(errorHandler);
 
