@@ -17,14 +17,22 @@ This repository now separates the single-file React prototype into a frontend (V
 ## Running locally
 Package installation from npm may require network access. If available:
 
-```bash
-cd frontend && npm install && npm run dev
-cd ../server && npm install && npm run start
-```
+### Backend setup (Express + Prisma)
+1) `cd server`
+2) Copy `.env.example` to `.env` and fill in values for `DATABASE_URL`, `API_KEY`, and `PORT` (see comments in the example file).
+3) `npm install`
+4) `npx prisma migrate dev` to apply schema migrations to your local database.
+5) `npx prisma db seed` to populate sample slides and playlists.
+6) `npm run dev` to start the API server in watch mode.
 
-The API listens on port `3001`. Point the React app to the API endpoints to persist slides and screen playlists.
+The API reads `PORT` (default `4000`) from the environment. Send the configured `API_KEY` in an `x-api-key` header for all non-GET requests (POST, PUT, PATCH, DELETE). GET routes remain public for read-only access.
 
-Set an `API_KEY` environment variable for the server and send it in an `x-api-key` header when calling any non-GET endpoints (POST, PUT, PATCH, DELETE). GET routes remain public for read-only access.
+### Frontend setup (Vite React)
+1) `cd frontend`
+2) `npm install`
+3) `npm run dev`
+
+When running the frontend alongside the backend, point requests to the API with either `REACT_APP_API_BASE=http://localhost:4000` (for CRA-style tooling) or `VITE_API_BASE=http://localhost:4000` (for Vite). Update the port if you override `PORT` on the server.
 
 ## Testing
 Each workspace includes simple commands:
