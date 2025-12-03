@@ -2,16 +2,22 @@ import React from 'react';
 import { Image as ImageIcon, Video } from 'lucide-react';
 import { useAppContext } from '../context/AppContext';
 import { useSlideRotation } from '../hooks/useSlideRotation';
+import { useScreens } from '../hooks/useScreens';
+import { useSlides } from '../hooks/useSlides';
+import { usePlaylist } from '../hooks/usePlaylist';
 
 export function DisplayPlayer() {
-  const { activeLocation, displayScreenId, data, goDashboard } = useAppContext();
-  const screen = activeLocation?.screens.find((s) => s.id === displayScreenId);
+  const { displayScreenId, goDashboard } = useAppContext();
+  const { data: screens = [] } = useScreens();
+  const { data: slides = [] } = useSlides();
+  const playlist = usePlaylist(displayScreenId);
 
-  const slidesToPlay = (screen?.slides || [])
-    .map((id) => data.slides.find((s) => s.id === id))
+  const screen = screens.find((s) => s.id === displayScreenId);
+  const slideQueue = (playlist.data || screen?.slides || [])
+    .map((id) => slides.find((s) => s.id === id))
     .filter(Boolean);
 
-  const { currentSlide } = useSlideRotation(slidesToPlay, screen?.rotation);
+  const { currentSlide } = useSlideRotation(slideQueue, screen?.rotation);
 
   if (!screen || !currentSlide) {
     return (
