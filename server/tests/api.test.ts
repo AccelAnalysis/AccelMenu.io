@@ -140,3 +140,40 @@ describe("Playlist ordering", () => {
     ]);
   });
 });
+
+describe("Legacy export", () => {
+  it("streams a legacy-compatible backup with download headers", async () => {
+    const screen = await createScreen("Expo Hall");
+    const firstSlide = await createSlide(0, "Agenda");
+    const secondSlide = await createSlide(1, "Sponsor");
+
+    await createPlaylistEntry(screen.id, firstSlide.id, 0);
+    await createPlaylistEntry(screen.id, secondSlide.id, 1);
+
+    const response = await request(app)
+      .get("/api/export/legacy")
+      .set("x-api-key", API_KEY);
+
+    expect(response.status).toBe(200);
+    expect(response.headers["content-disposition"]).toContain("attachment;");
+    expect(response.headers["content-type"]).toContain("application/json");
+
+    const payload = JSON.parse(response.text);
+
+    expect(payload.slides[0]).toMatchObject({
+      id: firstSlide.id,
+      name: firstSlide.title,
+      title: firstSlide.title,
+    });
+
+    const playlists = payload.playlists.find((playlist: any) => playlist.screenId === screen.id);
+    expect(playlists?.slides).toEqual([firstSlide.id, secondSlide.id]);
+
+    const screenWithSlides = payload.screens.find((entry: any) => entry.id === screen.id);
+    expect(screenWithSlides.slides).toEqual([firstSlide.id, secondSlide.id]);
+    expect(payload.playlistEntries.map((entry: any) => entry.slideId)).toEqual([
+      firstSlide.id,
+      secondSlide.id,
+    ]);
+  });
+});

@@ -47,3 +47,16 @@ export const removeFromPlaylist = (screenId, itemId) =>
 export const exportData = () => request('/api/export');
 export const importData = (payload) => request('/api/import', { method: 'POST', body: JSON.stringify(payload) });
 export const importLegacyData = (payload) => request('/api/import/legacy', { method: 'POST', body: JSON.stringify(payload) });
+export const exportLegacyBackup = async () => {
+  const headers = {
+    ...(API_KEY ? { 'x-api-key': API_KEY } : {}),
+  };
+
+  const response = await fetch(`${API_BASE_URL}/api/export/legacy`, { headers });
+  if (!response.ok) {
+    const errorText = await response.text();
+    throw new Error(errorText || 'Export failed');
+  }
+
+  return response;
+};

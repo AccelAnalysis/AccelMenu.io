@@ -1,11 +1,11 @@
 import React, { useRef, useState } from 'react';
-import { Upload } from 'lucide-react';
+import { Download, Upload } from 'lucide-react';
 import { useToast } from '../hooks/useToast';
 import { Toast } from './Toast';
 
 const MAX_FILE_SIZE = 5 * 1024 * 1024; // 5MB
 
-export function ImportLegacySection({ onImport, isImporting }) {
+export function ImportLegacySection({ onImport, isImporting, onExport, isExporting, errorMessage }) {
   const [selectedFile, setSelectedFile] = useState(null);
   const [validationError, setValidationError] = useState('');
   const inputRef = useRef(null);
@@ -73,6 +73,16 @@ export function ImportLegacySection({ onImport, isImporting }) {
             Upload a legacy JSON export to merge it with your existing slides, screens, and playlists.
           </p>
         </div>
+        {onExport && (
+          <button
+            type="button"
+            onClick={onExport}
+            disabled={isExporting || isImporting}
+            className="px-3 py-2 bg-neutral-800 hover:bg-neutral-700 rounded text-xs border border-neutral-700 flex items-center gap-2 disabled:opacity-60"
+          >
+            <Download size={14} /> {isExporting ? 'Exporting…' : 'Export backup'}
+          </button>
+        )}
       </div>
 
       <form className="mt-4 space-y-3" onSubmit={handleSubmit}>
@@ -108,7 +118,12 @@ export function ImportLegacySection({ onImport, isImporting }) {
           )}
         </div>
 
-        {validationError && <div className="text-xs text-red-400" role="alert">{validationError}</div>}
+        {(validationError || errorMessage) && (
+          <div className="text-xs text-red-400 space-y-1" role="alert">
+            {validationError && <div>{validationError}</div>}
+            {errorMessage && <div>{errorMessage}</div>}
+          </div>
+        )}
       </form>
 
       <Toast toast={toast} onClose={clearToast} />

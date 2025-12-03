@@ -7,7 +7,8 @@ import { ImportLegacySection } from '../components/ImportLegacySection';
 import { useSlides } from '../hooks/useSlides';
 import { useScreens } from '../hooks/useScreens';
 import { usePlaylist } from '../hooks/usePlaylist';
-import { exportData, importData, importLegacyData } from '../services/api';
+import { exportData, exportLegacyBackup, importData, importLegacyData } from '../services/api';
+import { downloadJsonResponse } from '../utils/download';
 
 export function Dashboard() {
   const { openEditor, openDisplay } = useAppContext();
@@ -17,6 +18,8 @@ export function Dashboard() {
   const [draggedScreen, setDraggedScreen] = useState(null);
   const [selectedScreenId, setSelectedScreenId] = useState(null);
   const [isExporting, setIsExporting] = useState(false);
+  const [isLegacyExporting, setIsLegacyExporting] = useState(false);
+  const [legacyExportError, setLegacyExportError] = useState('');
   const [isImporting, setIsImporting] = useState(false);
   const [isLegacyImporting, setIsLegacyImporting] = useState(false);
   const fileInputRef = useRef(null);
@@ -90,6 +93,24 @@ export function Dashboard() {
       alert('Export failed. Please try again.');
     } finally {
       setIsExporting(false);
+    }
+  };
+
+  const handleLegacyExport = async () => {
+    setLegacyExportError('');
+    setIsLegacyExporting(true);
+
+    try {
+      const response = await exportLegacyBackup();
+      await downloadJsonResponse(
+        response,
+        `accelmenu-backup-${new Date().toISOString().slice(0, 10)}.json`
+      );
+    } catch (error) {
+      console.error('Failed to export backup', error);
+      setLegacyExportError(error.message || 'Export failed. Please try again.');
+    } finally {
+      setIsLegacyExporting(false);
     }
   };
 
@@ -246,7 +267,13 @@ export function Dashboard() {
             <SlideCard key={slide.id} slide={slide} onEdit={openEditor} />
           ))}
         </div>
-        <ImportLegacySection onImport={handleLegacyImport} isImporting={isLegacyImporting} />
+        <ImportLegacySection
+          onImport={handleLegacyImport}
+          isImporting={isLegacyImporting}
+          onExport={handleLegacyExport}
+          isExporting={isLegacyExporting}
+          errorMessage={legacyExportError}
+        />
       </div>
 
       <div
