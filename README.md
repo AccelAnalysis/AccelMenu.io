@@ -24,6 +24,8 @@ cd ../server && npm install && npm run start
 
 The API listens on port `3001`. Point the React app to the API endpoints to persist slides and screen playlists.
 
+Set an `API_KEY` environment variable for the server and send it in an `x-api-key` header when calling any non-GET endpoints (POST, PUT, PATCH, DELETE). GET routes remain public for read-only access.
+
 ## Testing
 Each workspace includes simple commands:
 

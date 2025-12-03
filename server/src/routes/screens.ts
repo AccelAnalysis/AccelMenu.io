@@ -1,5 +1,6 @@
 import { Router, Request, Response, NextFunction } from "express";
 import prisma from "../lib/prisma";
+import { authForMutations } from "../middleware/auth";
 import {
   createScreenSchema,
   updateScreenSchema,
@@ -7,6 +8,8 @@ import {
 } from "../validators/screen";
 
 const router = Router();
+
+router.use(authForMutations);
 
 router.get("/", async (_req: Request, res: Response, next: NextFunction) => {
   try {
