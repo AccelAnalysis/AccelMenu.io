@@ -7,7 +7,7 @@ import { ImportLegacySection } from '../components/ImportLegacySection';
 import { useSlides } from '../hooks/useSlides';
 import { useScreens } from '../hooks/useScreens';
 import { usePlaylist } from '../hooks/usePlaylist';
-import { exportData, exportLegacyBackup, importData, importLegacyData } from '../services/api';
+import { addToPlaylist, exportData, exportLegacyBackup, importData, importLegacyData } from '../services/api';
 import { downloadJsonResponse } from '../utils/download';
 
 export function Dashboard() {
@@ -16,6 +16,8 @@ export function Dashboard() {
   const { data: screens = [], createScreen, updateScreen, deleteScreen } = useScreens();
   const queryClient = useQueryClient();
   const [draggedScreen, setDraggedScreen] = useState(null);
+  const [draggedSlideId, setDraggedSlideId] = useState(null);
+  const [dropPreview, setDropPreview] = useState(null);
   const [selectedScreenId, setSelectedScreenId] = useState(null);
   const [newScreenName, setNewScreenName] = useState('');
   const [newScreenLocation, setNewScreenLocation] = useState('');
@@ -27,6 +29,10 @@ export function Dashboard() {
   const [isLegacyImporting, setIsLegacyImporting] = useState(false);
   const fileInputRef = useRef(null);
   const playlist = usePlaylist(selectedScreenId);
+  const layoutRef = useRef(null);
+
+  const SCREEN_WIDTH = 128;
+  const SCREEN_HEIGHT = 96;
 
   const selectedScreen = screens.find((s) => s.id === selectedScreenId);
   const selectedPlaylist = playlist.data || selectedScreen?.slides || [];
@@ -55,19 +61,95 @@ export function Dashboard() {
     setDraggedScreen(screenId);
   };
 
+  const handleSlideDragStart = (slideId) => {
+    setDraggedSlideId(slideId);
+  };
+
+  const handleSlideDragEnd = () => {
+    setDraggedSlideId(null);
+    setDropPreview(null);
+  };
+
   const handleDropScreen = (e) => {
     e.preventDefault();
+    const slideId = draggedSlideId || e.dataTransfer.getData('slideId');
+
+    if (slideId && dropPreview?.type === 'new') {
+      handleCreateScreenFromDrop(slideId, dropPreview);
+      handleSlideDragEnd();
+      return;
+    }
+
+    setDropPreview(null);
     if (!draggedScreen) return;
 
-    const rect = e.currentTarget.getBoundingClientRect();
-    const x = e.clientX - rect.left - 50;
-    const y = e.clientY - rect.top - 50;
+    const canvasPosition = getCanvasPosition(e);
+    if (!canvasPosition) return;
 
-    updateScreen({ id: draggedScreen, updates: { x, y } });
+    updateScreen({ id: draggedScreen, updates: canvasPosition });
     setDraggedScreen(null);
   };
 
-  const handleDragOver = (e) => e.preventDefault();
+  const getCanvasPosition = (e) => {
+    const rect = layoutRef.current?.getBoundingClientRect();
+    if (!rect) return null;
+
+    return {
+      x: e.clientX - rect.left - SCREEN_WIDTH / 2,
+      y: e.clientY - rect.top - SCREEN_HEIGHT / 2,
+    };
+  };
+
+  const handleDragOver = (e) => {
+    e.preventDefault();
+    const slideId = draggedSlideId || e.dataTransfer.getData('slideId');
+    if (!slideId) {
+      setDropPreview(null);
+      return;
+    }
+
+    const screenTarget = e.target.closest('[data-screen-id]');
+    if (screenTarget) {
+      setDropPreview({ type: 'screen', screenId: screenTarget.dataset.screenId });
+      return;
+    }
+
+    const canvasPosition = getCanvasPosition(e);
+    if (!canvasPosition) return;
+    setDropPreview({ type: 'new', ...canvasPosition });
+  };
+
+  const handleDragLeave = (e) => {
+    if (e.currentTarget.contains(e.relatedTarget)) return;
+    setDropPreview(null);
+  };
+
+  const handleCreateScreenFromDrop = async (slideId, position) => {
+    const slideName = slides.find((s) => s.id === slideId)?.name || 'New';
+    try {
+      const created = await createScreen({
+        name: `${slideName} Screen`,
+        location: 'Unassigned',
+        rotation: 15000,
+        slides: [slideId],
+        x: position.x,
+        y: position.y,
+      });
+
+      if (created?.id) {
+        setSelectedScreenId(created.id);
+        queryClient.setQueryData(['playlist', created.id], (existing) => existing || [slideId]);
+        await addToPlaylist(created.id, { slideId });
+        queryClient.invalidateQueries({ queryKey: ['playlist', created.id] });
+      }
+
+      queryClient.setQueryData(['screens'], (prev = []) =>
+        prev.map((screen) => (screen.id === created?.id ? { ...screen, slides: [slideId] } : screen))
+      );
+    } catch (error) {
+      console.error('Failed to create screen from slide', error);
+    }
+  };
 
   const addSlideToScreen = (screenId, slideId) => {
     playlist.addSlide({ screenId, slideId });
@@ -332,7 +414,13 @@ export function Dashboard() {
         <div className="flex-1 overflow-y-auto p-4 space-y-3">
           {slidesLoading && <div className="text-xs text-neutral-500">Loading slides...</div>}
           {!slidesLoading && slides.map((slide) => (
-            <SlideCard key={slide.id} slide={slide} onEdit={openEditor} />
+            <SlideCard
+              key={slide.id}
+              slide={slide}
+              onEdit={openEditor}
+              onDragStart={handleSlideDragStart}
+              onDragEnd={handleSlideDragEnd}
+            />
           ))}
         </div>
         <ImportLegacySection
@@ -433,25 +521,46 @@ export function Dashboard() {
 
       <div
         className="flex-1 bg-neutral-950 relative overflow-hidden"
+        ref={layoutRef}
         onDrop={handleDropScreen}
         onDragOver={handleDragOver}
+        onDragLeave={handleDragLeave}
         style={{ backgroundImage: 'radial-gradient(#333 1px, transparent 1px)', backgroundSize: '20px 20px' }}
+        data-testid="screen-layout"
       >
         <div className="absolute top-4 left-4 bg-neutral-800/80 p-2 rounded text-xs text-neutral-400 backdrop-blur">
           Screen Layout View
         </div>
 
+        {dropPreview?.type === 'new' && draggedSlideId && (
+          <div
+            data-testid="new-screen-preview"
+            className="absolute w-32 h-24 border-2 border-dashed border-orange-400/70 bg-orange-500/10 rounded-lg pointer-events-none flex items-center justify-center text-[11px] text-orange-300"
+            style={{ left: dropPreview.x, top: dropPreview.y }}
+          >
+            New screen here
+          </div>
+        )}
+
         {screens.map((screen) => (
           <div
             key={screen.id}
+            data-screen-id={screen.id}
             draggable
             onDragStart={() => handleDragStart(screen.id)}
-            onDragOver={(e) => e.preventDefault()}
+            onDragOver={(e) => {
+              e.preventDefault();
+              if (draggedSlideId) {
+                setDropPreview({ type: 'screen', screenId: screen.id });
+              }
+            }}
             onDrop={(e) => {
               const slideId = e.dataTransfer.getData('slideId');
               if (slideId) {
                 e.stopPropagation();
                 addSlideToScreen(screen.id, slideId);
+                handleSlideDragEnd();
+                return;
               }
             }}
             onClick={() => setSelectedScreenId(screen.id)}
@@ -460,7 +569,9 @@ export function Dashboard() {
               top: screen.y ?? 0,
               borderWidth: selectedScreenId === screen.id ? '2px' : '1px',
             }}
-            className={`absolute w-32 h-24 bg-neutral-800 rounded-lg shadow-xl cursor-move border-neutral-600 flex flex-col items-center justify-center transition-colors hover:border-orange-400 ${selectedScreenId === screen.id ? 'border-orange-500 bg-neutral-800' : ''}`}
+            className={`absolute w-32 h-24 bg-neutral-800 rounded-lg shadow-xl cursor-move border-neutral-600 flex flex-col items-center justify-center transition-colors hover:border-orange-400 ${selectedScreenId === screen.id ? 'border-orange-500 bg-neutral-800' : ''} ${
+              dropPreview?.type === 'screen' && dropPreview.screenId === screen.id ? 'border-green-500 ring-2 ring-green-500/30' : ''
+            }`}
           >
             <Monitor className="text-neutral-500 mb-1" size={20} />
             <span className="text-xs font-medium text-center px-1 truncate w-full">{screen.name}</span>
