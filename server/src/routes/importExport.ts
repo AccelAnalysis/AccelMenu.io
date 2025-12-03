@@ -1,5 +1,6 @@
 import { Router, Request, Response, NextFunction } from "express";
 import { randomUUID } from "crypto";
+import { Readable } from "stream";
 import prisma from "../lib/prisma";
 import { authForMutations } from "../middleware/auth";
 import { ImportBundleInput, importBundleSchema } from "../validators/importExport";
@@ -99,6 +100,63 @@ const normalizePlaylistEntries = (
   );
 };
 
+const buildLegacyExportBundle = (
+  slides: Awaited<ReturnType<typeof prisma.slide.findMany>>,
+  screens: Awaited<ReturnType<typeof prisma.screen.findMany>>,
+  playlistEntries: Awaited<ReturnType<typeof prisma.playlistEntry.findMany>>
+) => {
+  const orderedEntries = [...playlistEntries].sort((a, b) => a.position - b.position);
+
+  const playlistsByScreen = orderedEntries.reduce<Record<string, string[]>>((acc, entry) => {
+    if (!acc[entry.screenId]) {
+      acc[entry.screenId] = [];
+    }
+    acc[entry.screenId].push(entry.slideId);
+    return acc;
+  }, {});
+
+  return {
+    exportedAt: new Date().toISOString(),
+    slides: slides.map((slide) => ({
+      id: slide.id,
+      uuid: slide.id,
+      key: slide.id,
+      title: slide.title,
+      name: slide.title,
+      content: slide.content,
+      body: slide.content,
+      elements: slide.content,
+      mediaUrl: slide.mediaUrl,
+      media: slide.mediaUrl,
+      duration: slide.duration,
+      durationMs: slide.duration,
+      durationSeconds: slide.duration,
+      order: slide.order,
+      position: slide.order,
+    })),
+    screens: screens.map((screen) => ({
+      id: screen.id,
+      uuid: screen.id,
+      name: screen.name,
+      location: screen.location,
+      placement: screen.location,
+      status: screen.status,
+      slides: playlistsByScreen[screen.id] ?? [],
+    })),
+    playlists: Object.entries(playlistsByScreen).map(([screenId, slidesForScreen]) => ({
+      screenId,
+      slides: slidesForScreen,
+    })),
+    playlistEntries: orderedEntries.map((entry) => ({
+      id: entry.id,
+      screenId: entry.screenId,
+      slideId: entry.slideId,
+      position: entry.position,
+      active: entry.active,
+    })),
+  } as const;
+};
+
 router.get("/export", async (_req: Request, res: Response, next: NextFunction) => {
   try {
     const [slides, screens, playlistEntries] = await Promise.all([
@@ -117,6 +175,29 @@ router.get("/export", async (_req: Request, res: Response, next: NextFunction) =
     next(error);
   }
 });
+
+router.get(
+  "/export/legacy",
+  async (_req: Request, res: Response, next: NextFunction) => {
+    try {
+      const [slides, screens, playlistEntries] = await Promise.all([
+        prisma.slide.findMany({ orderBy: { order: "asc" } }),
+        prisma.screen.findMany({ orderBy: { createdAt: "asc" } }),
+        prisma.playlistEntry.findMany({ orderBy: { position: "asc" } }),
+      ]);
+
+      const payload = buildLegacyExportBundle(slides, screens, playlistEntries);
+
+      const filename = `accelmenu-backup-${new Date().toISOString().slice(0, 10)}.json`;
+      res.setHeader("Content-Type", "application/json");
+      res.setHeader("Content-Disposition", `attachment; filename=\"${filename}\"`);
+
+      Readable.from([JSON.stringify(payload, null, 2)]).pipe(res);
+    } catch (error) {
+      next(error);
+    }
+  }
+);
 
 router.post("/import", async (req: Request, res: Response, next: NextFunction) => {
   try {
