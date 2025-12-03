@@ -9,7 +9,13 @@ import errorHandler from "./middleware/errorHandler";
 
 const app = express();
 
-app.use(cors());
+const allowedOrigins = process.env.FRONTEND_ORIGIN?.split(",").map((origin) => origin.trim());
+
+app.use(
+  cors({
+    origin: allowedOrigins && allowedOrigins.length > 0 ? allowedOrigins : undefined,
+  })
+);
 app.use(express.json());
 app.use(morgan("dev"));
 

@@ -1,0 +1,18 @@
+{
+  "name": "accelmenu-monorepo",
+  "private": true,
+  "workspaces": [
+    "frontend",
+    "server"
+  ],
+  "scripts": {
+    "dev": "npm run dev --workspace frontend",
+    "build": "npm run build --workspace frontend",
+    "dev:server": "npm run dev --workspace server",
+    "start:server": "npm run start --workspace server",
+    "lint": "npm run lint --workspace frontend && npm run lint --workspace server",
+    "test": "npm run test --workspace server",
+    "ci": "npm run lint && npm run test && npm run build",
+    "prisma:generate": "npm run prisma:generate --workspace server"
+  }
+}
