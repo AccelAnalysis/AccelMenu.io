@@ -1,6 +1,10 @@
-import express, { Request, Response, NextFunction } from "express";
+import express, { Request, Response } from "express";
 import cors from "cors";
 import morgan from "morgan";
+import slidesRouter from "./routes/slides";
+import screensRouter from "./routes/screens";
+import playlistsRouter from "./routes/playlists";
+import errorHandler from "./middleware/errorHandler";
 
 const app = express();
 
@@ -12,13 +16,10 @@ app.get("/health", (_req: Request, res: Response) => {
   res.json({ status: "ok" });
 });
 
-// eslint-disable-next-line @typescript-eslint/no-unused-vars
-app.use((err: unknown, _req: Request, res: Response, _next: NextFunction) => {
-  if (err instanceof Error) {
-    return res.status(500).json({ message: err.message });
-  }
+app.use("/api/slides", slidesRouter);
+app.use("/api/screens", screensRouter);
+app.use("/api/playlists", playlistsRouter);
 
-  return res.status(500).json({ message: "Internal Server Error" });
-});
+app.use(errorHandler);
 
 export default app;
