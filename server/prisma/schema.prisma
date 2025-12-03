@@ -1,0 +1,54 @@
+// Prisma schema for AccelMenu server
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+enum ScreenStatus {
+  ACTIVE
+  INACTIVE
+}
+
+model Slide {
+  id        String   @id @default(cuid())
+  title     String
+  content   Json
+  mediaUrl  String?
+  duration  Int
+  order     Int
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  playlistEntries PlaylistEntry[]
+}
+
+model Screen {
+  id        String         @id @default(cuid())
+  name      String
+  location  String
+  status    ScreenStatus   @default(ACTIVE)
+  createdAt DateTime       @default(now())
+  updatedAt DateTime       @updatedAt
+
+  playlistEntries PlaylistEntry[]
+}
+
+model PlaylistEntry {
+  id        String   @id @default(cuid())
+  screenId  String
+  slideId   String
+  position  Int
+  active    Boolean @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  screen Screen @relation(fields: [screenId], references: [id])
+  slide  Slide  @relation(fields: [slideId], references: [id])
+
+  @@unique([screenId, position])
+}
