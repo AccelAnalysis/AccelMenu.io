@@ -1,0 +1,49 @@
+{
+  "slides": [
+    {
+      "uuid": "slide-legacy-1",
+      "title": "Legacy Welcome",
+      "body": { "text": "Welcome to the system" },
+      "media": "https://cdn.example.com/welcome.png",
+      "durationMs": 12000,
+      "position": 5
+    },
+    {
+      "title": "Fallback Slide",
+      "elements": { "text": "No id provided" },
+      "duration": 8
+    }
+  ],
+  "screens": [
+    {
+      "uuid": "screen-legacy-1",
+      "name": "Lobby Screen",
+      "placement": "HQ Lobby",
+      "status": "INACTIVE",
+      "slides": ["slide-legacy-1", "missing-slide"]
+    },
+    {
+      "name": "Second Screen"
+    }
+  ],
+  "playlists": [
+    {
+      "screenId": "screen-legacy-1",
+      "slides": ["slide-legacy-1", "missing-slide", "Fallback Slide"]
+    }
+  ],
+  "playlistEntries": [
+    {
+      "id": "legacy-entry-1",
+      "screenId": "screen-legacy-1",
+      "slideId": "slide-legacy-1",
+      "position": 2,
+      "active": false
+    },
+    {
+      "screenId": "unknown-screen",
+      "slideId": "slide-legacy-1",
+      "position": 0
+    }
+  ]
+}
