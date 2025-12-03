@@ -42,3 +42,7 @@ export const reorderPlaylist = (screenId, payload) =>
   request(`/api/screens/${screenId}/playlist/reorder`, { method: 'POST', body: JSON.stringify(payload) });
 export const removeFromPlaylist = (screenId, itemId) =>
   request(`/api/screens/${screenId}/playlist/${itemId}`, { method: 'DELETE' });
+
+// Data import/export
+export const exportData = () => request('/api/export');
+export const importData = (payload) => request('/api/import', { method: 'POST', body: JSON.stringify(payload) });

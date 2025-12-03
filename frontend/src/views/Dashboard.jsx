@@ -1,17 +1,23 @@
-import React, { useState } from 'react';
-import { Monitor, Play, Plus, Trash2, Settings, X } from 'lucide-react';
+import React, { useRef, useState } from 'react';
+import { Monitor, Play, Plus, Trash2, Settings, X, Download, Upload } from 'lucide-react';
+import { useQueryClient } from '@tanstack/react-query';
 import { useAppContext } from '../context/AppContext';
 import { SlideCard } from '../components/SlideCard';
 import { useSlides } from '../hooks/useSlides';
 import { useScreens } from '../hooks/useScreens';
 import { usePlaylist } from '../hooks/usePlaylist';
+import { exportData, importData } from '../services/api';
 
 export function Dashboard() {
   const { openEditor, openDisplay } = useAppContext();
   const { data: slides = [], createSlide, isLoading: slidesLoading } = useSlides();
   const { data: screens = [], updateScreen } = useScreens();
+  const queryClient = useQueryClient();
   const [draggedScreen, setDraggedScreen] = useState(null);
   const [selectedScreenId, setSelectedScreenId] = useState(null);
+  const [isExporting, setIsExporting] = useState(false);
+  const [isImporting, setIsImporting] = useState(false);
+  const fileInputRef = useRef(null);
   const playlist = usePlaylist(selectedScreenId);
 
   const selectedScreen = screens.find((s) => s.id === selectedScreenId);
@@ -39,6 +45,143 @@ export function Dashboard() {
     playlist.addSlide({ screenId, slideId });
   };
 
+  const getPlaylistsForExport = () => {
+    return (queryClient.getQueryData(['screens']) || screens).map((screen) => {
+      const cachedPlaylist = queryClient.getQueryData(['playlist', screen.id]);
+      return {
+        screenId: screen.id,
+        slides: cachedPlaylist || screen.slides || [],
+      };
+    });
+  };
+
+  const buildLocalExport = () => ({
+    exportedAt: new Date().toISOString(),
+    slides: queryClient.getQueryData(['slides']) || slides,
+    screens: queryClient.getQueryData(['screens']) || screens,
+    playlists: getPlaylistsForExport(),
+  });
+
+  const handleExport = async () => {
+    setIsExporting(true);
+    try {
+      let payload;
+
+      try {
+        payload = await exportData();
+      } catch (error) {
+        console.warn('API export failed, falling back to local data', error);
+        payload = buildLocalExport();
+      }
+
+      const blob = new Blob([JSON.stringify(payload, null, 2)], {
+        type: 'application/json',
+      });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `accelmenu-export-${new Date().toISOString().slice(0, 10)}.json`;
+      link.click();
+      URL.revokeObjectURL(url);
+    } catch (error) {
+      console.error('Failed to export data', error);
+      alert('Export failed. Please try again.');
+    } finally {
+      setIsExporting(false);
+    }
+  };
+
+  const extractPlaylists = (payload) => {
+    if (Array.isArray(payload?.playlists)) {
+      return payload.playlists.map((p) => ({
+        screenId: p.screenId,
+        slides: p.slides || p.slideIds || [],
+      }));
+    }
+
+    if (Array.isArray(payload?.playlistEntries)) {
+      const grouped = payload.playlistEntries.reduce((acc, entry) => {
+        if (!acc[entry.screenId]) acc[entry.screenId] = [];
+        acc[entry.screenId].push(entry);
+        return acc;
+      }, {});
+
+      return Object.entries(grouped).map(([screenId, entries]) => ({
+        screenId,
+        slides: entries
+          .sort((a, b) => (a.position ?? 0) - (b.position ?? 0))
+          .map((entry) => entry.slideId),
+      }));
+    }
+
+    return [];
+  };
+
+  const applyImportLocally = (payload) => {
+    const playlists = extractPlaylists(payload);
+    const slidesToSet = payload?.slides || [];
+
+    const screensWithPlaylists = (payload?.screens || []).map((screen) => {
+      const playlistForScreen = playlists.find((p) => p.screenId === screen.id);
+      return playlistForScreen ? { ...screen, slides: playlistForScreen.slides } : screen;
+    });
+
+    queryClient.setQueryData(['slides'], slidesToSet);
+    queryClient.setQueryData(['screens'], screensWithPlaylists);
+
+    playlists.forEach((pl) => {
+      queryClient.setQueryData(['playlist', pl.screenId], pl.slides || []);
+    });
+
+    queryClient.invalidateQueries({ queryKey: ['slides'] });
+    queryClient.invalidateQueries({ queryKey: ['screens'] });
+    playlists.forEach((pl) => {
+      queryClient.invalidateQueries({ queryKey: ['playlist', pl.screenId] });
+    });
+  };
+
+  const handleImportPayload = async (payload) => {
+    setIsImporting(true);
+    try {
+      try {
+        await importData(payload);
+        queryClient.invalidateQueries({ queryKey: ['slides'] });
+        queryClient.invalidateQueries({ queryKey: ['screens'] });
+        queryClient.invalidateQueries({ queryKey: ['playlist'] });
+        (payload?.playlists || []).forEach((pl) => {
+          queryClient.invalidateQueries({ queryKey: ['playlist', pl.screenId] });
+        });
+      } catch (error) {
+        console.warn('API import failed, applying locally', error);
+        applyImportLocally(payload);
+      }
+
+      alert('Import completed successfully');
+    } catch (error) {
+      console.error('Failed to import data', error);
+      alert('Import failed. Please check the file and try again.');
+    } finally {
+      setIsImporting(false);
+      if (fileInputRef.current) {
+        fileInputRef.current.value = '';
+      }
+    }
+  };
+
+  const handleFileChange = async (event) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    try {
+      const text = await file.text();
+      const parsed = JSON.parse(text);
+      await handleImportPayload(parsed);
+    } catch (error) {
+      console.error('Invalid import file', error);
+      alert('Unable to parse the selected file. Ensure it is valid JSON.');
+    }
+  };
+
   const createNewSlide = () => {
     createSlide({
       name: 'New Slide',
@@ -49,6 +192,30 @@ export function Dashboard() {
 
   return (
     <div className="flex h-[calc(100vh-3.5rem)]">
+      <div className="absolute top-16 right-4 z-20 flex gap-2">
+        <button
+          onClick={handleExport}
+          disabled={isExporting}
+          className="px-3 py-1.5 bg-neutral-800 hover:bg-neutral-700 rounded text-sm border border-neutral-700 flex items-center gap-2 disabled:opacity-50"
+        >
+          <Download size={14} /> {isExporting ? 'Exporting...' : 'Export JSON'}
+        </button>
+        <button
+          onClick={() => fileInputRef.current?.click()}
+          disabled={isImporting}
+          className="px-3 py-1.5 bg-neutral-800 hover:bg-neutral-700 rounded text-sm border border-neutral-700 flex items-center gap-2 disabled:opacity-50"
+        >
+          <Upload size={14} /> {isImporting ? 'Importing...' : 'Import JSON'}
+        </button>
+        <input
+          type="file"
+          accept="application/json"
+          className="hidden"
+          ref={fileInputRef}
+          onChange={handleFileChange}
+        />
+      </div>
+
       <div className="w-64 bg-neutral-900 border-r border-neutral-800 flex flex-col">
         <div className="p-4 border-b border-neutral-800 flex justify-between items-center">
           <h2 className="font-semibold text-neutral-300">Slide Library</h2>
