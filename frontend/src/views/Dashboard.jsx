@@ -3,10 +3,11 @@ import { Monitor, Play, Plus, Trash2, Settings, X, Download, Upload } from 'luci
 import { useQueryClient } from '@tanstack/react-query';
 import { useAppContext } from '../context/AppContext';
 import { SlideCard } from '../components/SlideCard';
+import { ImportLegacySection } from '../components/ImportLegacySection';
 import { useSlides } from '../hooks/useSlides';
 import { useScreens } from '../hooks/useScreens';
 import { usePlaylist } from '../hooks/usePlaylist';
-import { exportData, importData } from '../services/api';
+import { exportData, importData, importLegacyData } from '../services/api';
 
 export function Dashboard() {
   const { openEditor, openDisplay } = useAppContext();
@@ -17,6 +18,7 @@ export function Dashboard() {
   const [selectedScreenId, setSelectedScreenId] = useState(null);
   const [isExporting, setIsExporting] = useState(false);
   const [isImporting, setIsImporting] = useState(false);
+  const [isLegacyImporting, setIsLegacyImporting] = useState(false);
   const fileInputRef = useRef(null);
   const playlist = usePlaylist(selectedScreenId);
 
@@ -168,6 +170,23 @@ export function Dashboard() {
     }
   };
 
+  const handleLegacyImport = async (payload) => {
+    setIsLegacyImporting(true);
+    try {
+      await importLegacyData(payload);
+      queryClient.invalidateQueries({ queryKey: ['slides'] });
+      queryClient.invalidateQueries({ queryKey: ['screens'] });
+      queryClient.invalidateQueries({ queryKey: ['playlist'] });
+      (payload?.screens || []).forEach((screen) => {
+        queryClient.invalidateQueries({ queryKey: ['playlist', screen.id] });
+      });
+    } catch (error) {
+      throw error;
+    } finally {
+      setIsLegacyImporting(false);
+    }
+  };
+
   const handleFileChange = async (event) => {
     const file = event.target.files?.[0];
     if (!file) return;
@@ -209,7 +228,7 @@ export function Dashboard() {
         </button>
         <input
           type="file"
-          accept="application/json"
+          accept=".json,application/json"
           className="hidden"
           ref={fileInputRef}
           onChange={handleFileChange}
@@ -227,6 +246,7 @@ export function Dashboard() {
             <SlideCard key={slide.id} slide={slide} onEdit={openEditor} />
           ))}
         </div>
+        <ImportLegacySection onImport={handleLegacyImport} isImporting={isLegacyImporting} />
       </div>
 
       <div
