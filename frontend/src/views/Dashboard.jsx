@@ -1,5 +1,5 @@
-import React, { useRef, useState } from 'react';
-import { Monitor, Play, Plus, Trash2, Settings, X, Download, Upload } from 'lucide-react';
+import React, { useEffect, useRef, useState } from 'react';
+import { Monitor, Play, Plus, Trash2, Settings, X, Download, Upload, MapPin } from 'lucide-react';
 import { useQueryClient } from '@tanstack/react-query';
 import { useAppContext } from '../context/AppContext';
 import { SlideCard } from '../components/SlideCard';
@@ -13,10 +13,13 @@ import { downloadJsonResponse } from '../utils/download';
 export function Dashboard() {
   const { openEditor, openDisplay } = useAppContext();
   const { data: slides = [], createSlide, isLoading: slidesLoading } = useSlides();
-  const { data: screens = [], updateScreen } = useScreens();
+  const { data: screens = [], createScreen, updateScreen, deleteScreen } = useScreens();
   const queryClient = useQueryClient();
   const [draggedScreen, setDraggedScreen] = useState(null);
   const [selectedScreenId, setSelectedScreenId] = useState(null);
+  const [newScreenName, setNewScreenName] = useState('');
+  const [newScreenLocation, setNewScreenLocation] = useState('');
+  const [screenDetails, setScreenDetails] = useState({ name: '', location: '' });
   const [isExporting, setIsExporting] = useState(false);
   const [isLegacyExporting, setIsLegacyExporting] = useState(false);
   const [legacyExportError, setLegacyExportError] = useState('');
@@ -27,6 +30,26 @@ export function Dashboard() {
 
   const selectedScreen = screens.find((s) => s.id === selectedScreenId);
   const selectedPlaylist = playlist.data || selectedScreen?.slides || [];
+
+  useEffect(() => {
+    if (screens.length === 0) {
+      setSelectedScreenId(null);
+      return;
+    }
+
+    if (!selectedScreenId || !screens.some((screen) => screen.id === selectedScreenId)) {
+      setSelectedScreenId(screens[0].id);
+    }
+  }, [screens, selectedScreenId]);
+
+  useEffect(() => {
+    if (selectedScreen) {
+      setScreenDetails({
+        name: selectedScreen.name || '',
+        location: selectedScreen.location || '',
+      });
+    }
+  }, [selectedScreen]);
 
   const handleDragStart = (screenId) => {
     setDraggedScreen(screenId);
@@ -48,6 +71,51 @@ export function Dashboard() {
 
   const addSlideToScreen = (screenId, slideId) => {
     playlist.addSlide({ screenId, slideId });
+  };
+
+  const handleCreateScreen = async (event) => {
+    event.preventDefault();
+    if (!newScreenName.trim() || !newScreenLocation.trim()) return;
+
+    try {
+      const created = await createScreen({
+        name: newScreenName.trim(),
+        location: newScreenLocation.trim(),
+        rotation: 15000,
+      });
+      setSelectedScreenId(created.id);
+      setNewScreenName('');
+      setNewScreenLocation('');
+    } catch (error) {
+      console.error('Failed to create screen', error);
+    }
+  };
+
+  const handleDeleteScreen = async (screenId) => {
+    const remainingScreens = screens.filter((screen) => screen.id !== screenId);
+    try {
+      await deleteScreen(screenId);
+      if (selectedScreenId === screenId) {
+        setSelectedScreenId(remainingScreens[0]?.id ?? null);
+      }
+    } catch (error) {
+      console.error('Failed to delete screen', error);
+    }
+  };
+
+  const handleSaveScreenDetails = async () => {
+    if (!selectedScreen) return;
+    try {
+      await updateScreen({
+        id: selectedScreen.id,
+        updates: {
+          name: screenDetails.name.trim() || 'Untitled Screen',
+          location: screenDetails.location.trim(),
+        },
+      });
+    } catch (error) {
+      console.error('Failed to update screen', error);
+    }
   };
 
   const getPlaylistsForExport = () => {
@@ -276,6 +344,93 @@ export function Dashboard() {
         />
       </div>
 
+      <div className="w-80 bg-neutral-900 border-r border-neutral-800 flex flex-col">
+        <div className="p-4 border-b border-neutral-800">
+          <div className="flex items-center justify-between">
+            <div>
+              <h2 className="font-semibold text-neutral-300">Locations</h2>
+              <p className="text-xs text-neutral-500">Create and manage display screens.</p>
+            </div>
+          </div>
+        </div>
+
+        <form onSubmit={handleCreateScreen} className="p-4 border-b border-neutral-800 space-y-2">
+          <input
+            type="text"
+            placeholder="Screen name"
+            value={newScreenName}
+            onChange={(e) => setNewScreenName(e.target.value)}
+            className="w-full bg-neutral-800 border border-neutral-700 rounded px-2 py-1 text-sm"
+          />
+          <input
+            type="text"
+            placeholder="Location (e.g. Lobby)"
+            value={newScreenLocation}
+            onChange={(e) => setNewScreenLocation(e.target.value)}
+            className="w-full bg-neutral-800 border border-neutral-700 rounded px-2 py-1 text-sm"
+          />
+          <button
+            type="submit"
+            disabled={!newScreenName.trim() || !newScreenLocation.trim()}
+            className="w-full flex items-center justify-center gap-2 px-3 py-2 bg-orange-600 hover:bg-orange-500 rounded text-sm font-semibold disabled:opacity-60"
+          >
+            <Plus size={16} /> Add Screen
+          </button>
+        </form>
+
+        <div className="flex-1 overflow-y-auto p-4 space-y-2">
+          {screens.length === 0 && (
+            <div className="text-xs text-neutral-500">No screens yet. Create one to begin.</div>
+          )}
+          {screens.map((screen) => {
+            const isSelected = selectedScreenId === screen.id;
+            return (
+              <div
+                key={screen.id}
+                className={`p-3 rounded border ${
+                  isSelected ? 'border-orange-500 bg-neutral-800' : 'border-neutral-800 bg-neutral-900'
+                }`}
+              >
+                <div className="flex items-start justify-between gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setSelectedScreenId(screen.id)}
+                    className="text-left flex-1"
+                  >
+                    <div className="font-semibold text-sm text-neutral-100 flex items-center gap-2">
+                      <Monitor size={16} className="text-neutral-500" />
+                      <span className="truncate" title={screen.name}>{screen.name}</span>
+                    </div>
+                    <div className="text-xs text-neutral-500 flex items-center gap-1 mt-1" title={screen.location}>
+                      <MapPin size={12} />
+                      <span className="truncate">{screen.location || 'Unassigned location'}</span>
+                    </div>
+                  </button>
+                  <div className="flex gap-1">
+                    <button
+                      type="button"
+                      onClick={() => openDisplay(screen.id)}
+                      className="p-1 rounded hover:bg-neutral-800 text-green-400"
+                      title="Open player"
+                    >
+                      <Play size={14} />
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => handleDeleteScreen(screen.id)}
+                      className="p-1 rounded hover:bg-neutral-800 text-red-400"
+                      title="Delete screen"
+                    >
+                      <Trash2 size={14} />
+                    </button>
+                  </div>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+
       <div
         className="flex-1 bg-neutral-950 relative overflow-hidden"
         onDrop={handleDropScreen}
@@ -301,8 +456,8 @@ export function Dashboard() {
             }}
             onClick={() => setSelectedScreenId(screen.id)}
             style={{
-              left: screen.x,
-              top: screen.y,
+              left: screen.x ?? 0,
+              top: screen.y ?? 0,
               borderWidth: selectedScreenId === screen.id ? '2px' : '1px',
             }}
             className={`absolute w-32 h-24 bg-neutral-800 rounded-lg shadow-xl cursor-move border-neutral-600 flex flex-col items-center justify-center transition-colors hover:border-orange-400 ${selectedScreenId === screen.id ? 'border-orange-500 bg-neutral-800' : ''}`}
@@ -310,6 +465,7 @@ export function Dashboard() {
             <Monitor className="text-neutral-500 mb-1" size={20} />
             <span className="text-xs font-medium text-center px-1 truncate w-full">{screen.name}</span>
             <span className="text-[10px] text-neutral-500">{(screen.slides || []).length} Slides</span>
+            <span className="text-[10px] text-neutral-600">{screen.location}</span>
 
             <button
               onClick={(e) => { e.stopPropagation(); openDisplay(screen.id); }}
@@ -331,11 +487,45 @@ export function Dashboard() {
               </div>
 
               <div className="space-y-4">
+                <div className="grid grid-cols-1 gap-2">
+                  <div>
+                    <label className="text-xs text-neutral-500 uppercase">Name</label>
+                    <input
+                      type="text"
+                      value={screenDetails.name}
+                      onChange={(e) => setScreenDetails((prev) => ({ ...prev, name: e.target.value }))}
+                      className="w-full bg-neutral-800 border border-neutral-700 rounded px-2 py-1 mt-1 text-sm"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-xs text-neutral-500 uppercase">Location</label>
+                    <input
+                      type="text"
+                      value={screenDetails.location}
+                      onChange={(e) => setScreenDetails((prev) => ({ ...prev, location: e.target.value }))}
+                      className="w-full bg-neutral-800 border border-neutral-700 rounded px-2 py-1 mt-1 text-sm"
+                    />
+                  </div>
+                  <div className="flex gap-2">
+                    <button
+                      onClick={handleSaveScreenDetails}
+                      className="flex-1 px-3 py-2 bg-orange-600 hover:bg-orange-500 rounded text-sm font-semibold"
+                    >
+                      Save Details
+                    </button>
+                    <button
+                      onClick={() => handleDeleteScreen(selectedScreen.id)}
+                      className="px-3 py-2 bg-red-900/50 hover:bg-red-800/70 rounded text-sm text-red-200"
+                    >
+                      Delete
+                    </button>
+                  </div>
+                </div>
                 <div>
                   <label className="text-xs text-neutral-500 uppercase">Rotation (ms)</label>
                   <input
                     type="number"
-                    value={selectedScreen.rotation}
+                    value={selectedScreen.rotation ?? 15000}
                     onChange={(e) => {
                       updateScreen({ id: selectedScreen.id, updates: { rotation: parseInt(e.target.value, 10) } });
                     }}
