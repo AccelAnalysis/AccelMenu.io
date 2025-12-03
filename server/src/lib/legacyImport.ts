@@ -107,8 +107,28 @@ const normalizeSlides = (bundle: LegacyBundle) => {
     registerSlideAliases(idMap, slide, id);
     idMap.set(id, id);
 
+    const rawContent =
+      (typeof slide.content === "object" && slide.content !== null ? slide.content : null) ??
+      (typeof slide.body === "object" && slide.body !== null ? slide.body : null) ??
+      (typeof slide === "object" && slide !== null ? slide : {});
+
+    const content = { ...rawContent } as Record<string, unknown>;
+
+    const incomingElements = Array.isArray(slide.elements)
+      ? slide.elements
+      : Array.isArray((rawContent as Record<string, unknown>).elements)
+        ? (rawContent as { elements: unknown[] }).elements
+        : [];
+
+    if (incomingElements.length && !content.elements) {
+      content.elements = incomingElements;
+    }
+
+    if (typeof slide.background === "string" && !content.background) {
+      content.background = slide.background;
+    }
+
     const title = slide.title?.trim() || slide.name?.trim() || `Slide ${index + 1}`;
-    const content = slide.content ?? slide.body ?? slide.elements ?? {};
     const mediaUrl = slide.mediaUrl ?? slide.media ?? null;
     const order = Number.isInteger(slide.order)
       ? Number(slide.order)

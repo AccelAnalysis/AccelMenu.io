@@ -1,5 +1,18 @@
 import React, { useRef, useState } from 'react';
-import { Image as ImageIcon, Type, Video, DollarSign, Box, Grid, Clock, Trash2, Minimize2, Maximize2 } from 'lucide-react';
+import {
+  Image as ImageIcon,
+  Type,
+  Video,
+  DollarSign,
+  Box,
+  CloudSun,
+  MessageCircle,
+  QrCode,
+  Clock,
+  Trash2,
+  Minimize2,
+  Maximize2,
+} from 'lucide-react';
 import { useAppContext } from '../context/AppContext';
 import { SlideElement } from '../components/SlideElement';
 import { generateId } from '../services/id';
@@ -11,10 +24,33 @@ const TILE_TYPES = [
   { type: 'video', icon: Video, label: 'Video Player' },
   { type: 'price', icon: DollarSign, label: 'Price Tag' },
   { type: 'shape', icon: Box, label: 'Shape/Panel' },
-  { type: 'weather', icon: Grid, label: 'Weather Widget' },
-  { type: 'social', icon: Grid, label: 'Social Feed' },
-  { type: 'qr', icon: Grid, label: 'QR Code' },
+  {
+    type: 'weather',
+    icon: CloudSun,
+    label: 'Weather Widget',
+    defaults: { location: 'San Francisco, CA', units: 'imperial', apiKey: '', backgroundColor: '#0b1220' },
+  },
+  {
+    type: 'social',
+    icon: MessageCircle,
+    label: 'Social Feed',
+    defaults: { platform: 'twitter', handle: '@accelmenu', feedUrl: '', backgroundColor: '#111827' },
+  },
+  {
+    type: 'qr',
+    icon: QrCode,
+    label: 'QR Code',
+    defaults: { url: 'https://accelmenu.io', label: 'Scan Me', backgroundColor: '#0f0f12' },
+  },
 ];
+
+const TYPE_DIMENSIONS = {
+  text: { width: 200, height: 60 },
+  price: { width: 200, height: 60 },
+  weather: { width: 260, height: 130 },
+  social: { width: 260, height: 160 },
+  qr: { width: 160, height: 160 },
+};
 
 export function SlideEditor() {
   const { editingSlideId } = useAppContext();
@@ -40,19 +76,23 @@ export function SlideEditor() {
   };
 
   const handleAddElement = (type) => {
+    const typeDefaults = TILE_TYPES.find((tile) => tile.type === type)?.defaults || {};
+    const baseDimensions = TYPE_DIMENSIONS[type] || { width: 150, height: 150 };
+
     const newEl = {
       id: generateId(),
       type,
       content: type === 'price' ? '$0.00' : type === 'text' ? 'New Text' : '',
       x: 100,
       y: 100,
-      width: type === 'text' || type === 'price' ? 200 : 150,
-      height: type === 'text' || type === 'price' ? 60 : 150,
+      width: baseDimensions.width,
+      height: baseDimensions.height,
       color: '#ffffff',
-      backgroundColor: type === 'shape' ? '#333333' : 'transparent',
+      backgroundColor: type === 'shape' ? '#333333' : typeDefaults.backgroundColor || 'transparent',
       fontSize: 24,
       zIndex: slide.elements.length + 1,
       opacity: 1,
+      ...typeDefaults,
     };
 
     updateSlideElements([...slide.elements, newEl]);
@@ -255,6 +295,102 @@ export function SlideEditor() {
                     />
                   </label>
                 </div>
+
+                {selectedElement.type === 'weather' && (
+                  <div className="space-y-2 pt-2 border-t border-neutral-800">
+                    <div className="text-xs text-neutral-500 uppercase">Weather Settings</div>
+                    <label className="text-xs text-neutral-400">Location
+                      <input
+                        type="text"
+                        required
+                        value={selectedElement.location || ''}
+                        onChange={(e) => updateSelectedElement({ location: e.target.value })}
+                        placeholder="City, Country"
+                        className="w-full bg-neutral-900 border border-neutral-700 rounded p-2 text-sm text-white"
+                      />
+                    </label>
+                    <label className="text-xs text-neutral-400">API Key
+                      <input
+                        type="text"
+                        value={selectedElement.apiKey || ''}
+                        onChange={(e) => updateSelectedElement({ apiKey: e.target.value })}
+                        placeholder="Enter provider key"
+                        className="w-full bg-neutral-900 border border-neutral-700 rounded p-2 text-sm text-white"
+                      />
+                    </label>
+                    <label className="text-xs text-neutral-400">Units
+                      <select
+                        value={selectedElement.units || 'imperial'}
+                        onChange={(e) => updateSelectedElement({ units: e.target.value })}
+                        className="w-full bg-neutral-900 border border-neutral-700 rounded p-2 text-sm text-white"
+                      >
+                        <option value="imperial">Imperial (°F)</option>
+                        <option value="metric">Metric (°C)</option>
+                      </select>
+                    </label>
+                  </div>
+                )}
+
+                {selectedElement.type === 'social' && (
+                  <div className="space-y-2 pt-2 border-t border-neutral-800">
+                    <div className="text-xs text-neutral-500 uppercase">Social Feed</div>
+                    <label className="text-xs text-neutral-400">Platform
+                      <select
+                        value={selectedElement.platform || 'twitter'}
+                        onChange={(e) => updateSelectedElement({ platform: e.target.value })}
+                        className="w-full bg-neutral-900 border border-neutral-700 rounded p-2 text-sm text-white"
+                      >
+                        <option value="twitter">Twitter / X</option>
+                        <option value="instagram">Instagram</option>
+                        <option value="facebook">Facebook</option>
+                        <option value="custom">Custom</option>
+                      </select>
+                    </label>
+                    <label className="text-xs text-neutral-400">Handle / Page
+                      <input
+                        type="text"
+                        value={selectedElement.handle || ''}
+                        onChange={(e) => updateSelectedElement({ handle: e.target.value })}
+                        placeholder="@yourhandle"
+                        className="w-full bg-neutral-900 border border-neutral-700 rounded p-2 text-sm text-white"
+                      />
+                    </label>
+                    <label className="text-xs text-neutral-400">Feed URL
+                      <input
+                        type="url"
+                        value={selectedElement.feedUrl || ''}
+                        onChange={(e) => updateSelectedElement({ feedUrl: e.target.value })}
+                        placeholder="https://social.com/feed"
+                        className="w-full bg-neutral-900 border border-neutral-700 rounded p-2 text-sm text-white"
+                      />
+                    </label>
+                  </div>
+                )}
+
+                {selectedElement.type === 'qr' && (
+                  <div className="space-y-2 pt-2 border-t border-neutral-800">
+                    <div className="text-xs text-neutral-500 uppercase">QR Code</div>
+                    <label className="text-xs text-neutral-400">Target URL
+                      <input
+                        type="url"
+                        required
+                        value={selectedElement.url || ''}
+                        onChange={(e) => updateSelectedElement({ url: e.target.value })}
+                        placeholder="https://example.com"
+                        className="w-full bg-neutral-900 border border-neutral-700 rounded p-2 text-sm text-white"
+                      />
+                    </label>
+                    <label className="text-xs text-neutral-400">Label (optional)
+                      <input
+                        type="text"
+                        value={selectedElement.label || ''}
+                        onChange={(e) => updateSelectedElement({ label: e.target.value })}
+                        placeholder="Scan Me"
+                        className="w-full bg-neutral-900 border border-neutral-700 rounded p-2 text-sm text-white"
+                      />
+                    </label>
+                  </div>
+                )}
 
                 <button
                   onClick={() => {
