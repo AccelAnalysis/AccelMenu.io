@@ -1,45 +1,81 @@
 # AccelMenu Signage
 
-This repository now separates the single-file React prototype into a frontend (Vite-based React) and a backend API powered by SQLite. The backend seeds data that matches the demo content previously baked into the JSX file.
+Monorepo containing a Vite-based React frontend and an Express + Prisma backend. Root-level npm scripts orchestrate both workspaces for local development, CI, and deployment.
 
 ## Structure
-- `frontend/`: React SPA entrypoint using `App.jsx` (migrated from the original single file). Tailwind-style class names are preserved in JSX; add Tailwind or custom CSS as needed.
-- `server/`: Express API with SQLite persistence (via `better-sqlite3`). Tables cover slides, screens, and playlist ordering and seed from `seedData.js` on first run.
+- `frontend/`: React SPA entrypoint using `App.jsx`. Tailwind-style class names remain in JSX; bring your own CSS or Tailwind pipeline as needed.
+- `server/`: Express API with Prisma/SQLite persistence. Routes cover slides, screens, playlist ordering, and import/export flows.
 
-### Frontend organization
-- `src/context/`: React context for global signage data (locations, slides, selected view) to reduce prop drilling.
-- `src/views/`: Screen-level pages (`Dashboard`, `SlideEditor`, `DisplayPlayer`) that own their respective workflows.
-- `src/components/`: Reusable UI elements such as slide cards and renderable slide elements shared between editor/player.
-- `src/hooks/`: Custom hooks like `useSlideRotation` that encapsulate timer/rotation behavior.
-- `src/services/`: API/client utilities and helpers (e.g., ID generation placeholder).
-- `src/styles/`: Global CSS entry that keeps Tailwind-compatible imports intact.
+### Workspace scripts (run from the repo root)
+- `npm run dev` – start the frontend (Vite dev server).
+- `npm run build` – build the frontend for production.
+- `npm run dev:server` – start the backend with Nodemon/TypeScript.
+- `npm run start:server` – run the compiled backend.
+- `npm run lint` – lint frontend and backend sources.
+- `npm run test` – run backend Vitest suite.
+- `npm run prisma:generate` – generate the Prisma client inside `server/`.
 
-## Running locally
-Package installation from npm may require network access. If available:
+## Environment
+Backend configuration lives in `server/.env` (copy from `server/.env.example`):
 
-### Backend setup (Express + Prisma)
-1) `cd server`
-2) Copy `.env.example` to `.env` and fill in values for `DATABASE_URL`, `API_KEY`, and `PORT` (see comments in the example file).
-3) `npm install`
-4) `npx prisma migrate dev` to apply schema migrations to your local database.
-5) `npx prisma db seed` to populate sample slides and playlists.
-6) `npm run dev` to start the API server in watch mode.
+- `PORT` – backend port (default: `4000`).
+- `API_KEY` – required in the `x-api-key` header for non-GET requests.
+- `FRONTEND_ORIGIN` – comma-separated list of allowed origins for CORS (e.g., `http://localhost:5173`).
+- `DATABASE_URL` – SQLite connection string (e.g., `file:./dev.db`).
 
-The API reads `PORT` (default `4000`) from the environment. Send the configured `API_KEY` in an `x-api-key` header for all non-GET requests (POST, PUT, PATCH, DELETE). GET routes remain public for read-only access.
+Frontend API base URL can be set with `VITE_API_BASE` (defaults to `/api`).
 
-### Frontend setup (Vite React)
-1) `cd frontend`
-2) `npm install`
-3) `npm run dev`
+## Local setup
+Package installation from npm may require registry access.
 
-When running the frontend alongside the backend, point requests to the API with either `REACT_APP_API_BASE=http://localhost:4000` (for CRA-style tooling) or `VITE_API_BASE=http://localhost:4000` (for Vite). Update the port if you override `PORT` on the server.
+1) Install dependencies: `npm install` (from the repo root to install both workspaces).
+2) Create backend env: `cp server/.env.example server/.env` and update values as needed.
+3) Apply database schema: `cd server && npx prisma migrate dev` (or `npx prisma db push` for rapid prototyping).
+4) Seed data (optional): `npx prisma db seed`.
+5) Start backend: `npm run dev:server`.
+6) Start frontend: `npm run dev` (uses Vite).
 
-## Testing
-Each workspace includes simple commands:
+## Production build & serve
+1) Build frontend assets: `npm run build` (outputs to `frontend/dist`).
+2) Compile backend: `cd server && npm run build`.
+3) Launch backend: `npm run start:server` (ensure `DATABASE_URL`, `API_KEY`, and `FRONTEND_ORIGIN` are set).
+4) Configure your reverse proxy to serve `frontend/dist` (static) and proxy `/api` to the backend.
 
-```bash
-cd frontend && npm run build   # builds the SPA
-cd server && npm test          # runs sqlite seed smoke tests
+## Deployment
+### Frontend (static)
+- **GitHub Pages**: Build with `npm run build`, push `frontend/dist` via a Pages workflow (see example below). Set `VITE_API_BASE` to your backend URL.
+- **Vercel/Netlify**: Set build command to `npm run build --workspace frontend` and publish directory to `frontend/dist`. Configure `VITE_API_BASE` in environment variables.
+
+### Backend
+- **Render/Fly.io/Heroku-like**: Deploy the `server/` workspace with `npm install`, `npm run build --workspace server`, and `npm run start:server`. Set `DATABASE_URL`, `API_KEY`, `FRONTEND_ORIGIN`, and any provider-specific variables.
+- **Small VM**: Install Node.js and SQLite, clone the repo, run `npm install`, `npm run build --workspace server`, then `npm run start:server` under a process manager (pm2/systemd). Point `FRONTEND_ORIGIN` to your deployed frontend URL.
+
+### Database migrations
+Run `npx prisma migrate deploy` during deployments after setting `DATABASE_URL`. For prototyping SQLite setups, `npx prisma db push` is acceptable.
+
+### GitHub Pages workflow example
+```yaml
+name: Deploy Frontend to Pages
+on:
+  push:
+    branches: ["main"]
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm install
+      - run: npm run build --workspace frontend
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: frontend/dist
+      - uses: actions/deploy-pages@v4
 ```
 
-If the environment blocks npm registry access, these commands will fail to install dependencies; see troubleshooting in your runtime.
+## Continuous Integration
+GitHub Actions (`.github/workflows/ci.yml`) runs linting, backend tests, Prisma client generation, and frontend builds with npm caching.
