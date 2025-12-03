@@ -43,7 +43,13 @@ const normalizeScreens = (screens: ImportBundleInput["screens"]) =>
     location:
       typeof screen.location === "string" && screen.location.length > 0
         ? screen.location
-        : screen.placement ?? "", 
+        : screen.placement ?? "",
+    rotation:
+      typeof screen.rotation === "number" && screen.rotation > 0
+        ? Math.round(screen.rotation)
+        : 15000,
+    x: typeof screen.x === "number" ? Math.round(screen.x) : 0,
+    y: typeof screen.y === "number" ? Math.round(screen.y) : 0,
     status: screen.status === "INACTIVE" ? "INACTIVE" : "ACTIVE",
   }));
 
@@ -140,6 +146,9 @@ const buildLegacyExportBundle = (
       name: screen.name,
       location: screen.location,
       placement: screen.location,
+      rotation: screen.rotation,
+      x: screen.x,
+      y: screen.y,
       status: screen.status,
       slides: playlistsByScreen[screen.id] ?? [],
     })),

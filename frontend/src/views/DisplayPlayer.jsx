@@ -17,7 +17,7 @@ export function DisplayPlayer() {
     .map((id) => slides.find((s) => s.id === id))
     .filter(Boolean);
 
-  const { currentSlide } = useSlideRotation(slideQueue, screen?.rotation);
+  const { currentSlide } = useSlideRotation(slideQueue, screen?.rotation ?? 15000);
 
   if (!screen || !currentSlide) {
     return (

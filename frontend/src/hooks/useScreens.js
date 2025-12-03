@@ -14,7 +14,14 @@ export function useScreens() {
       await queryClient.cancelQueries({ queryKey: SCREENS_KEY });
       const previousScreens = queryClient.getQueryData(SCREENS_KEY) || [];
       const tempId = payload.id || generateId();
-      const optimistic = { ...payload, id: tempId, slides: payload.slides || [] };
+      const optimistic = {
+        ...payload,
+        id: tempId,
+        slides: payload.slides || [],
+        rotation: payload.rotation ?? 15000,
+        x: payload.x ?? 0,
+        y: payload.y ?? 0,
+      };
       queryClient.setQueryData(SCREENS_KEY, [...previousScreens, optimistic]);
       return { previousScreens, tempId };
     },
