@@ -11,27 +11,50 @@ const router = Router();
 router.use(authForMutations);
 
 const normalizeSlides = (slides: ImportBundleInput["slides"]) =>
-  slides.map((slide, index) => ({
-    id: typeof slide.id === "string" ? slide.id : randomUUID(),
-    title:
-      typeof slide.title === "string" && slide.title.length > 0
-        ? slide.title
-        : typeof slide.name === "string" && slide.name.length > 0
-          ? slide.name
-          : `Slide ${index + 1}`,
-    content: slide.content ?? slide.elements ?? slide,
-    mediaUrl: typeof slide.mediaUrl === "string" ? slide.mediaUrl : null,
-    duration:
-      typeof slide.duration === "number" && slide.duration >= 0
-        ? Math.round(slide.duration)
-        : 15000,
-    order:
-      typeof slide.order === "number"
-        ? Math.round(slide.order)
-        : typeof slide.position === "number"
-          ? Math.round(slide.position)
-          : index,
-  }));
+  slides.map((slide, index) => {
+    const rawContent =
+      (typeof slide.content === "object" && slide.content !== null ? slide.content : null) ??
+      (typeof slide.body === "object" && slide.body !== null ? slide.body : null) ??
+      (typeof slide === "object" && slide !== null ? slide : {});
+
+    const content = { ...rawContent } as Record<string, unknown>;
+
+    const incomingElements = Array.isArray(slide.elements)
+      ? slide.elements
+      : Array.isArray((rawContent as Record<string, unknown>).elements)
+        ? (rawContent as { elements: unknown[] }).elements
+        : [];
+
+    if (incomingElements.length && !content.elements) {
+      content.elements = incomingElements;
+    }
+
+    if (typeof slide.background === "string" && !content.background) {
+      content.background = slide.background;
+    }
+
+    return {
+      id: typeof slide.id === "string" ? slide.id : randomUUID(),
+      title:
+        typeof slide.title === "string" && slide.title.length > 0
+          ? slide.title
+          : typeof slide.name === "string" && slide.name.length > 0
+            ? slide.name
+            : `Slide ${index + 1}`,
+      content,
+      mediaUrl: typeof slide.mediaUrl === "string" ? slide.mediaUrl : null,
+      duration:
+        typeof slide.duration === "number" && slide.duration >= 0
+          ? Math.round(slide.duration)
+          : 15000,
+      order:
+        typeof slide.order === "number"
+          ? Math.round(slide.order)
+          : typeof slide.position === "number"
+            ? Math.round(slide.position)
+            : index,
+    };
+  });
 
 const normalizeScreens = (screens: ImportBundleInput["screens"]) =>
   screens.map((screen, index) => ({

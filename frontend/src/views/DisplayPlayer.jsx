@@ -1,10 +1,10 @@
 import React from 'react';
-import { Image as ImageIcon, Video } from 'lucide-react';
 import { useAppContext } from '../context/AppContext';
 import { useSlideRotation } from '../hooks/useSlideRotation';
 import { useScreens } from '../hooks/useScreens';
 import { useSlides } from '../hooks/useSlides';
 import { usePlaylist } from '../hooks/usePlaylist';
+import { TileContent } from '../components/TileContent';
 
 export function DisplayPlayer() {
   const { displayScreenId, goDashboard } = useAppContext();
@@ -56,17 +56,7 @@ export function DisplayPlayer() {
               whiteSpace: 'pre-wrap',
             }}
           >
-            {el.type === 'text' || el.type === 'price' ? el.content : ''}
-            {el.type === 'image' && (
-              <div className="w-full h-full bg-neutral-800 flex items-center justify-center">
-                <ImageIcon className="opacity-50" size={48} />
-              </div>
-            )}
-            {el.type === 'video' && (
-              <div className="w-full h-full bg-black flex items-center justify-center">
-                <Video className="opacity-50" size={48} />
-              </div>
-            )}
+            <TileContent data={el} mode="display" />
           </div>
         ))}
       </div>
