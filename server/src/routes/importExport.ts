@@ -3,6 +3,7 @@ import { randomUUID } from "crypto";
 import prisma from "../lib/prisma";
 import { authForMutations } from "../middleware/auth";
 import { ImportBundleInput, importBundleSchema } from "../validators/importExport";
+import { parseLegacyBundle } from "../lib/legacyImport";
 
 const router = Router();
 
@@ -150,6 +151,118 @@ router.post("/import", async (req: Request, res: Response, next: NextFunction) =
         screens: screens.length,
         playlistEntries: playlistEntries.length,
       },
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
+router.post("/import/legacy", async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const parsed = parseLegacyBundle(req.body);
+
+    const summary = {
+      inserted: { slides: 0, screens: 0, playlistEntries: 0 },
+      skipped: { slides: 0, screens: 0, playlistEntries: 0 },
+    };
+
+    const warnings = [...parsed.warnings];
+
+    await prisma.$transaction(async (tx) => {
+      const existingSlides = await tx.slide.findMany({
+        where: { id: { in: parsed.slides.map((slide) => slide.id) } },
+        select: { id: true },
+      });
+
+      const slideIds = new Set(existingSlides.map((slide) => slide.id));
+      const slidesToInsert = parsed.slides.filter((slide) => {
+        if (slideIds.has(slide.id)) {
+          summary.skipped.slides += 1;
+          return false;
+        }
+
+        slideIds.add(slide.id);
+        return true;
+      });
+
+      if (slidesToInsert.length) {
+        await tx.slide.createMany({ data: slidesToInsert });
+        summary.inserted.slides = slidesToInsert.length;
+      }
+
+      const existingScreens = await tx.screen.findMany({
+        where: { id: { in: parsed.screens.map((screen) => screen.id) } },
+        select: { id: true },
+      });
+
+      const screenIds = new Set(existingScreens.map((screen) => screen.id));
+      const screensToInsert = parsed.screens.filter((screen) => {
+        if (screenIds.has(screen.id)) {
+          summary.skipped.screens += 1;
+          return false;
+        }
+
+        screenIds.add(screen.id);
+        return true;
+      });
+
+      if (screensToInsert.length) {
+        await tx.screen.createMany({ data: screensToInsert });
+        summary.inserted.screens = screensToInsert.length;
+      }
+
+      const existingPlaylistEntries = await tx.playlistEntry.findMany({
+        where: { id: { in: parsed.playlistEntries.map((entry) => entry.id) } },
+        select: { id: true, screenId: true, position: true },
+      });
+
+      const playlistEntryIds = new Set(existingPlaylistEntries.map((entry) => entry.id));
+      const playlistEntryKeys = new Set(
+        existingPlaylistEntries.map((entry) => `${entry.screenId}:${entry.position}`)
+      );
+
+      const playlistEntriesToInsert: typeof parsed.playlistEntries = [];
+
+      parsed.playlistEntries.forEach((entry) => {
+        if (!screenIds.has(entry.screenId) || !slideIds.has(entry.slideId)) {
+          summary.skipped.playlistEntries += 1;
+          warnings.push(
+            `Skipping playlist entry for screen ${entry.screenId} and slide ${entry.slideId} due to missing references.`
+          );
+          return;
+        }
+
+        const dedupeKey = `${entry.screenId}:${entry.position}`;
+
+        if (playlistEntryIds.has(entry.id) || playlistEntryKeys.has(dedupeKey)) {
+          summary.skipped.playlistEntries += 1;
+          warnings.push(
+            `Skipping duplicate playlist entry for screen ${entry.screenId} at position ${entry.position}.`
+          );
+          return;
+        }
+
+        playlistEntryIds.add(entry.id);
+        playlistEntryKeys.add(dedupeKey);
+        playlistEntriesToInsert.push(entry);
+      });
+
+      if (playlistEntriesToInsert.length) {
+        await tx.playlistEntry.createMany({ data: playlistEntriesToInsert });
+        summary.inserted.playlistEntries = playlistEntriesToInsert.length;
+      }
+    });
+
+    if (warnings.length) {
+      console.warn("Legacy import warnings", warnings);
+    }
+
+    console.info("Legacy import completed", summary);
+
+    res.status(201).json({
+      message: "Legacy import completed",
+      counts: summary,
+      warnings,
     });
   } catch (error) {
     next(error);
