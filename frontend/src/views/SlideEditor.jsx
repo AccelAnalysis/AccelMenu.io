@@ -3,6 +3,7 @@ import { Image as ImageIcon, Type, Video, DollarSign, Box, Grid, Clock, Trash2, 
 import { useAppContext } from '../context/AppContext';
 import { SlideElement } from '../components/SlideElement';
 import { generateId } from '../services/id';
+import { useSlides } from '../hooks/useSlides';
 
 const TILE_TYPES = [
   { type: 'text', icon: Type, label: 'Text Block' },
@@ -16,8 +17,9 @@ const TILE_TYPES = [
 ];
 
 export function SlideEditor() {
-  const { data, setData, editingSlideId } = useAppContext();
-  const slide = data.slides.find((s) => s.id === editingSlideId);
+  const { editingSlideId } = useAppContext();
+  const { data: slides = [], updateSlide } = useSlides();
+  const slide = slides.find((s) => s.id === editingSlideId);
   const [selectedElId, setSelectedElId] = useState(null);
   const [panelsMinimized, setPanelsMinimized] = useState(false);
   const canvasRef = useRef(null);
@@ -28,10 +30,7 @@ export function SlideEditor() {
   if (!slide) return <div className="p-6 text-white">Slide not found</div>;
 
   const updateSlideElements = (newElements) => {
-    setData((prev) => ({
-      ...prev,
-      slides: prev.slides.map((s) => (s.id === editingSlideId ? { ...s, elements: newElements } : s)),
-    }));
+    updateSlide({ id: editingSlideId, updates: { elements: newElements } });
   };
 
   const updateSelectedElement = (updates) => {
@@ -276,10 +275,7 @@ export function SlideEditor() {
                 <input
                   type="text"
                   value={slide.name}
-                  onChange={(e) => setData((prev) => ({
-                    ...prev,
-                    slides: prev.slides.map((s) => (s.id === editingSlideId ? { ...s, name: e.target.value } : s)),
-                  }))}
+                  onChange={(e) => updateSlide({ id: editingSlideId, updates: { name: e.target.value } })}
                   className="w-full bg-neutral-900 border border-neutral-700 rounded p-2 text-sm text-white"
                 />
               </div>
@@ -289,10 +285,7 @@ export function SlideEditor() {
                   <input
                     type="color"
                     value={slide.background}
-                    onChange={(e) => setData((prev) => ({
-                      ...prev,
-                      slides: prev.slides.map((s) => (s.id === editingSlideId ? { ...s, background: e.target.value } : s)),
-                    }))}
+                    onChange={(e) => updateSlide({ id: editingSlideId, updates: { background: e.target.value } })}
                     className="w-8 h-8 rounded cursor-pointer bg-transparent border-none"
                   />
                 </div>

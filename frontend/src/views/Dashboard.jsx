@@ -2,21 +2,20 @@ import React, { useState } from 'react';
 import { Monitor, Play, Plus, Trash2, Settings, X } from 'lucide-react';
 import { useAppContext } from '../context/AppContext';
 import { SlideCard } from '../components/SlideCard';
+import { useSlides } from '../hooks/useSlides';
+import { useScreens } from '../hooks/useScreens';
+import { usePlaylist } from '../hooks/usePlaylist';
 
 export function Dashboard() {
-  const {
-    data,
-    setData,
-    activeLocation,
-    openEditor,
-    openDisplay,
-    createSlide,
-  } = useAppContext();
-
+  const { openEditor, openDisplay } = useAppContext();
+  const { data: slides = [], createSlide, isLoading: slidesLoading } = useSlides();
+  const { data: screens = [], updateScreen } = useScreens();
   const [draggedScreen, setDraggedScreen] = useState(null);
   const [selectedScreenId, setSelectedScreenId] = useState(null);
+  const playlist = usePlaylist(selectedScreenId);
 
-  if (!activeLocation) return null;
+  const selectedScreen = screens.find((s) => s.id === selectedScreenId);
+  const selectedPlaylist = playlist.data || selectedScreen?.slides || [];
 
   const handleDragStart = (screenId) => {
     setDraggedScreen(screenId);
@@ -30,45 +29,23 @@ export function Dashboard() {
     const x = e.clientX - rect.left - 50;
     const y = e.clientY - rect.top - 50;
 
-    setData((prev) => {
-      const newLocs = [...prev.locations];
-      const locIndex = newLocs.findIndex((l) => l.id === activeLocation.id);
-      const screenIndex = newLocs[locIndex].screens.findIndex((s) => s.id === draggedScreen);
-      newLocs[locIndex].screens[screenIndex] = {
-        ...newLocs[locIndex].screens[screenIndex],
-        x,
-        y,
-      };
-      return { ...prev, locations: newLocs };
-    });
+    updateScreen({ id: draggedScreen, updates: { x, y } });
     setDraggedScreen(null);
   };
 
   const handleDragOver = (e) => e.preventDefault();
 
   const addSlideToScreen = (screenId, slideId) => {
-    setData((prev) => {
-      const newLocs = [...prev.locations];
-      const locIndex = newLocs.findIndex((l) => l.id === activeLocation.id);
-      const sIndex = newLocs[locIndex].screens.findIndex((s) => s.id === screenId);
-      const currentSlides = newLocs[locIndex].screens[sIndex].slides || [];
-
-      if (!currentSlides.includes(slideId)) {
-        newLocs[locIndex].screens[sIndex].slides = [...currentSlides, slideId];
-      }
-      return { ...prev, locations: newLocs };
-    });
+    playlist.addSlide({ screenId, slideId });
   };
 
   const createNewSlide = () => {
-    const newSlide = createSlide();
-    setData((prev) => ({
-      ...prev,
-      slides: [...prev.slides, newSlide],
-    }));
+    createSlide({
+      name: 'New Slide',
+      background: '#111111',
+      elements: [],
+    });
   };
-
-  const selectedScreen = activeLocation.screens.find((s) => s.id === selectedScreenId);
 
   return (
     <div className="flex h-[calc(100vh-3.5rem)]">
@@ -78,7 +55,8 @@ export function Dashboard() {
           <button onClick={createNewSlide} className="p-1 hover:bg-neutral-700 rounded"><Plus size={16} /></button>
         </div>
         <div className="flex-1 overflow-y-auto p-4 space-y-3">
-          {data.slides.map((slide) => (
+          {slidesLoading && <div className="text-xs text-neutral-500">Loading slides...</div>}
+          {!slidesLoading && slides.map((slide) => (
             <SlideCard key={slide.id} slide={slide} onEdit={openEditor} />
           ))}
         </div>
@@ -91,10 +69,10 @@ export function Dashboard() {
         style={{ backgroundImage: 'radial-gradient(#333 1px, transparent 1px)', backgroundSize: '20px 20px' }}
       >
         <div className="absolute top-4 left-4 bg-neutral-800/80 p-2 rounded text-xs text-neutral-400 backdrop-blur">
-          Location: {activeLocation.name} Layout View
+          Screen Layout View
         </div>
 
-        {activeLocation.screens.map((screen) => (
+        {screens.map((screen) => (
           <div
             key={screen.id}
             draggable
@@ -145,12 +123,7 @@ export function Dashboard() {
                     type="number"
                     value={selectedScreen.rotation}
                     onChange={(e) => {
-                      setData((prev) => {
-                        const newLocs = [...prev.locations];
-                        const s = newLocs.find((l) => l.id === activeLocation.id).screens.find((sc) => sc.id === selectedScreen.id);
-                        s.rotation = parseInt(e.target.value, 10);
-                        return { ...prev, locations: newLocs };
-                      });
+                      updateScreen({ id: selectedScreen.id, updates: { rotation: parseInt(e.target.value, 10) } });
                     }}
                     className="w-full bg-neutral-800 border border-neutral-700 rounded px-2 py-1 mt-1 text-sm"
                   />
@@ -161,11 +134,11 @@ export function Dashboard() {
             <div className="flex-1 overflow-y-auto p-4">
               <h3 className="text-xs font-semibold text-neutral-500 uppercase mb-3">Slide Stack</h3>
               <div className="space-y-2">
-                {selectedScreen.slides.map((sId, idx) => {
-                  const slideObj = data.slides.find((s) => s.id === sId);
+                {selectedPlaylist.map((sId, idx) => {
+                  const slideObj = slides.find((s) => s.id === sId);
                   if (!slideObj) return null;
                   return (
-                    <div key={sId} className="bg-neutral-800 p-2 rounded flex items-center justify-between group">
+                    <div key={`${sId}-${idx}`} className="bg-neutral-800 p-2 rounded flex items-center justify-between group">
                       <div className="flex items-center gap-2">
                         <span className="text-xs text-neutral-500 w-4">{idx + 1}</span>
                         <span className="text-sm">{slideObj.name}</span>
@@ -178,14 +151,7 @@ export function Dashboard() {
                           <Settings size={14} />
                         </button>
                         <button
-                          onClick={() => {
-                            setData((prev) => {
-                              const newLocs = [...prev.locations];
-                              const s = newLocs.find((l) => l.id === activeLocation.id).screens.find((sc) => sc.id === selectedScreen.id);
-                              s.slides = s.slides.filter((_, i) => i !== idx);
-                              return { ...prev, locations: newLocs };
-                            });
-                          }}
+                          onClick={() => playlist.removeFromPlaylist({ screenId: selectedScreen.id, itemId: idx })}
                           className="p-1 hover:bg-red-900/50 rounded text-neutral-400 hover:text-red-500"
                         >
                           <Trash2 size={14} />
@@ -194,7 +160,7 @@ export function Dashboard() {
                     </div>
                   );
                 })}
-                {selectedScreen.slides.length === 0 && (
+                {selectedPlaylist.length === 0 && (
                   <div className="text-center py-8 text-neutral-600 text-sm border-2 border-dashed border-neutral-800 rounded">
                     Drag slides here from the library
                   </div>
